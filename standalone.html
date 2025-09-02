@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Course Folder Name Generator</title>
+  <!-- Tailwind CSS via CDN with PostCSS processing -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+
+  <!-- Alpine.js -->
+  <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+  <!-- External CSS file -->
+  <link rel="stylesheet" href="styles.css">
+  <!-- Inline styles for x-cloak -->
+  <style>
+    [x-cloak] {
+      display: none;
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+  <div x-data="folderNameGenerator" x-init="init()" class="container mx-auto py-8 px-4">
+    <header class="mb-8">
+      <h1 class="text-2xl font-bold text-gray-800">Course Folder Name Generator</h1>
+      <p class="text-gray-600">Generate standardized folder names for your courses</p>
+      <div class="reset-fields" @click="eventInput = ''; langInput = ''; countryInput = ''; courseName = ''; ">Clear all fields</div>
+
+    </header>
+
+    <div class="grid md:grid-cols-2 gap-8">
+      <!-- Left column (form) -->
+      <div>
+        <div class="panel mb-4">
+          <label for="courseName" class="label">Course Name <span class="text-red-500">*</span></label>
+          <input 
+            id="courseName" 
+            type="text" 
+            class="input" 
+            x-model="courseName" 
+            placeholder="Enter course name"
+            aria-required="true"
+            @input="saveState()"
+          >
+          <div class="reset-field" @click="courseName = ''">Clear field</div>
+        </div>
+
+        <div class="panel mb-4">
+          <label for="langInput" class="label">Language (ISO 639-3)</label>
+          <div class="relative">
+            <input 
+              id="langInput" 
+              type="text" 
+              class="input" 
+              x-model="langInput" 
+              @focus="langOpen = true"
+              @input="langQuery = langInput; langActiveIdx = -1; saveState()"
+              @keydown="handleLangKeydown($event)"
+              placeholder="e.g. eng"
+              autocomplete="off"
+              aria-haspopup="listbox"
+              :aria-expanded="langOpen"
+            >
+            <div x-show="langOpen && filteredLangs.length" class="listbox">
+              <template x-for="(lang, idx) in filteredLangs" :key="lang.code">
+                <div 
+                  :id="`lang-option-${idx}`"
+                  :class="['option', { 'option-active': idx === langActiveIdx }]"
+                  role="option"
+                  :aria-selected="idx === langActiveIdx"
+                  @mousedown.prevent="selectLang(lang)"
+                  @mouseover="langActiveIdx = idx"
+                >
+                  <span x-text="`${lang.code} — ${lang.name}`"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+          <div class="hint" x-show="!filteredLangs.length && langQuery">No matching languages found</div>
+          <div class="reset-field" @click="langInput = ''">Clear field</div>
+
+        </div>
+
+        <div class="panel mb-4">
+          <label for="countryInput" class="label">Country/Region (ISO 3166-1 alpha-3)</label>
+          <div class="relative">
+            <input 
+              id="countryInput" 
+              type="text" 
+              class="input" 
+              x-model="countryInput" 
+              @focus="countryOpen = true"
+              @input="countryQuery = countryInput; countryActiveIdx = -1; saveState()"
+              @keydown="handleCountryKeydown($event)"
+              placeholder="e.g. USA"
+              autocomplete="off"
+              aria-haspopup="listbox"
+              :aria-expanded="countryOpen"
+            >
+            <div x-show="countryOpen && filteredCountries.length" class="listbox">
+              <template x-for="(country, idx) in filteredCountries" :key="country.code">
+                <div 
+                  :id="`country-option-${idx}`"
+                  :class="['option', { 'option-active': idx === countryActiveIdx }]"
+                  role="option"
+                  :aria-selected="idx === countryActiveIdx"
+                  @mousedown.prevent="selectCountry(country)"
+                  @mouseover="countryActiveIdx = idx"
+                >
+                  <span x-text="`${country.code} — ${country.name}`"></span>
+                </div>
+              </template>
+            </div>
+          </div>
+          <div class="hint" x-show="!filteredCountries.length && countryQuery">No matching countries found</div>
+          <div class="reset-field" @click="countryInput = ''">Clear field</div>
+
+        </div>
+
+        <div class="panel mb-4">
+          <label for="eventInput" class="label">Event (optional)</label>
+          <input 
+            id="eventInput" 
+            type="text" 
+            class="input" 
+            x-model="eventInput" 
+            placeholder="e.g. Webinar, Workshop"
+            @input="saveState()"
+          >
+          <div class="reset-field" @click="eventInput = ''">Clear field</div>
+
+        </div>
+
+        <div class="panel mb-4">
+          <div class="flex items-center mb-2">
+            <input 
+              id="includeDate" 
+              type="checkbox" 
+              class="h-4 w-4 text-indigo-600 rounded" 
+              x-model="includeDate"
+              @change="saveState()"
+            >
+            <label for="includeDate" class="ml-2 text-sm font-medium text-gray-700">Include date/version</label>
+          </div>
+          
+          <div x-show="includeDate">
+            <label for="dateInput" class="label">Date</label>
+            <input 
+              id="dateInput" 
+              type="date" 
+              class="input" 
+              x-model="dateInput"
+              @input="saveState()"
+            >
+          </div>
+        </div>
+      </div>
+
+      <!-- Right column (preview & copy) -->
+      <div>
+        <div class="panel">
+          <h2 class="text-lg font-medium text-gray-800 mb-2">Generated Folder Name</h2>
+          <div class="bg-gray-100 p-3 rounded mb-4 break-all font-mono text-sm">
+            <span x-text="preview"></span>
+          </div>
+          
+          <div class="hint" x-show="showAddLanguageHint">
+            Tip: add a language code if known.
+          </div>
+          
+          <button 
+            class="btn mt-4" 
+            @click="copyToClipboard()"
+            :disabled="!preview"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+            </svg>
+            Copy to clipboard
+          </button>
+          
+          <div x-show="copied" class="mt-2 text-sm text-green-600 flex items-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+            Copied!
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- External JavaScript file -->
+  <script src="app.js"></script>
+</body>
+</html>
